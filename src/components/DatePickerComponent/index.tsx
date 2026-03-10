@@ -14,7 +14,7 @@ const disabledDate: RangePickerProps['disabledDate'] = (current) => {
 
 const disabledDate2 = (date: Dayjs, info: GetProps<typeof DatePicker>) => {
   if (info.type === 'date') {
-    return date.month() === 3 || date.day() === 6 || date.date() === 30
+    return date.month() === 3 || date.day() === 6 || date.date() === 20
   }
 
   return false
