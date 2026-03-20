@@ -1,0 +1,22 @@
+.consultas-calendar-card .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #164e47;
+}
+
+.consultas-calendar-cell-empty {
+  min-height: 42px;
+}
+
+.consultas-calendar-cell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.consultas-calendar-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

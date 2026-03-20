@@ -1,0 +1,17 @@
+.agenda-card .ant-card-head-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #164e47;
+}
+
+.agenda-card .ant-table {
+  border: 1px solid #e4efec;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.agenda-card .ant-table-thead > tr > th {
+  background: #f1f8f6;
+  color: #1f4e48;
+  font-weight: 700;
+}

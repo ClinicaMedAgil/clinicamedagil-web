@@ -1,0 +1,92 @@
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-sider {
+  background: linear-gradient(180deg, #ffffff, #f5faf8) !important;
+  border-right: 1px solid #e5efec;
+}
+
+.app-brand {
+  margin: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #0f766e, #2aa89d);
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.app-header {
+  border-bottom: 1px solid #e5efec;
+  padding-inline: 24px !important;
+}
+
+.app-title {
+  color: #0f766e !important;
+  font-size: 16px;
+}
+
+.app-content {
+  margin: 0 18px;
+}
+
+.app-content-box {
+  margin-top: 18px;
+  padding: 24px;
+  min-height: 360px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+}
+
+.app-footer {
+  text-align: center;
+  background: transparent !important;
+  color: #6b7280;
+}
+
+.app-account-area {
+  display: flex;
+  align-items: center;
+}
+
+.account-trigger {
+  height: 40px;
+  padding-inline: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #d9ebe7;
+  background: linear-gradient(180deg, #ffffff, #f6fbfa);
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-trigger:hover {
+  border-color: #95d2c7 !important;
+  background: #ffffff !important;
+}
+
+.account-avatar {
+  background: linear-gradient(120deg, #0f766e, #2aa89d) !important;
+}
+
+.account-label {
+  font-weight: 600;
+  color: #1f4f48;
+}
+
+.account-role {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.12);
+  padding: 2px 8px;
+}
+
+.account-caret {
+  color: #4f766f;
+  font-size: 11px;
+}

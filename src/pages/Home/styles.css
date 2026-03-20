@@ -1,0 +1,149 @@
+.landing-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  color: #1d2d2a;
+}
+
+.landing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.logo {
+  margin: 0 !important;
+  color: #0f766e !important;
+}
+
+.hero-section {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.hero-title {
+  margin-bottom: 10px !important;
+  font-size: 48px !important;
+  line-height: 1.1 !important;
+}
+
+.hero-title span {
+  color: #0f766e;
+}
+
+.hero-text {
+  color: #536662;
+  max-width: 560px;
+}
+
+.doctor-placeholder {
+  height: 320px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #effaf7, #c6efea);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 82px;
+  color: #0f766e;
+}
+
+.highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 44px;
+}
+
+.highlight-grid .ant-card {
+  background: #0f766e;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+}
+
+.services-section,
+.faq-section {
+  margin-bottom: 54px;
+  text-align: center;
+}
+
+.section-tag {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.services-grid .ant-card {
+  background: #0f766e;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.testimonial-section {
+  margin-bottom: 54px;
+  text-align: center;
+  padding: 36px 20px;
+  border-radius: 16px;
+  background: linear-gradient(120deg, #0d6158, #14b8a6);
+}
+
+.testimonial-section .ant-typography {
+  color: #fff;
+}
+
+.testimonial-grid {
+  margin-top: 22px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.testimonial-grid .ant-card {
+  text-align: left;
+}
+
+.faq-section .ant-collapse {
+  text-align: left;
+}
+
+@media (max-width: 980px) {
+  .hero-section {
+    grid-template-columns: 1fr;
+  }
+
+  .highlight-grid,
+  .services-grid,
+  .testimonial-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .landing-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .hero-title {
+    font-size: 36px !important;
+  }
+
+  .highlight-grid,
+  .services-grid,
+  .testimonial-grid {
+    grid-template-columns: 1fr;
+  }
+}

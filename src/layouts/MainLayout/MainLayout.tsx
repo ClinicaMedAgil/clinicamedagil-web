@@ -1,23 +1,30 @@
-import React, { useState } from 'react'
 import {
-  DesktopOutlined,
-  FileOutlined,
-  PieChartOutlined,
+  AppstoreOutlined,
+  ClockCircleOutlined,
+  CalendarOutlined,
+  DownOutlined,
+  LockOutlined,
+  LogoutOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { Breadcrumb, Calendar, DatePicker, Layout, Menu, theme } from 'antd'
-import DatePickerComponent from '../../components/DatePickerComponent'
+import { Avatar, Button, Dropdown, Layout, Menu, Space, Typography, theme } from 'antd'
+import { useMemo, useState } from 'react'
+import type { Key, ReactNode } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router'
+import { useAuth } from '../../hooks/useAuth'
+import { authService } from '../../services/authService'
+import './MainLayout.css'
 
 const { Header, Content, Footer, Sider } = Layout
 
 type MenuItem = Required<MenuProps>['items'][number]
 
 function getItem(
-  label: React.ReactNode,
-  key: React.Key,
-  icon?: React.ReactNode,
+  label: ReactNode,
+  key: Key,
+  icon?: ReactNode,
   children?: MenuItem[]
 ): MenuItem {
   return {
@@ -28,62 +35,118 @@ function getItem(
   } as MenuItem
 }
 
-const items: MenuItem[] = [
-  getItem('Option 1', '1', <PieChartOutlined />),
-  getItem('Option 2', '2', <DesktopOutlined />),
-  getItem('User', 'sub1', <UserOutlined />, [
-    getItem('Tom', '3'),
-    getItem('Bill', '4'),
-    getItem('Alex', '5'),
-  ]),
-  getItem('Team', 'sub2', <TeamOutlined />, [
-    getItem('Team 1', '6'),
-    getItem('Team 2', '8'),
-  ]),
-  getItem('Files', '9', <FileOutlined />),
-]
-
-const MainLayout: React.FC = () => {
+const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { logout, roles, hasAnyRole } = useAuth()
+  const sessionUser = useMemo(() => authService.getSessionUser(), [roles])
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken()
+  const menuItems = useMemo<MenuItem[]>(() => {
+    const baseItems: MenuItem[] = [getItem('Consultas', '/app/consultas', <CalendarOutlined />)]
+
+    if (hasAnyRole(['ADMIN', 'ATENDENTE'])) {
+      baseItems.unshift(getItem('Usuários', '/app/usuarios', <TeamOutlined />))
+      baseItems.push(getItem('Agenda do Médico', '/app/agendas-medico', <ClockCircleOutlined />))
+    }
+
+    if (hasAnyRole(['ADMIN'])) {
+      baseItems.push(getItem('Especialidades', '/app/especialidades', <AppstoreOutlined />))
+    }
+
+    return baseItems
+  }, [hasAnyRole])
+
+  const selectedKeys = useMemo(() => {
+    if (location.pathname.startsWith('/app/usuarios')) {
+      return ['/app/usuarios']
+    }
+
+    if (location.pathname.startsWith('/app/especialidades')) {
+      return ['/app/especialidades']
+    }
+
+    if (location.pathname.startsWith('/app/consultas')) {
+      return ['/app/consultas']
+    }
+
+    if (location.pathname.startsWith('/app/agendas-medico')) {
+      return ['/app/agendas-medico']
+    }
+
+    return ['/app/consultas']
+  }, [location.pathname])
+
+  const accountMenuItems: MenuProps['items'] = [
+    { key: 'perfil', icon: <UserOutlined />, label: 'Perfil' },
+    { key: 'alterar-senha', icon: <LockOutlined />, label: 'Alterar a senha' },
+    { type: 'divider' },
+    { key: 'deslogar', icon: <LogoutOutlined />, label: 'Deslogar', danger: true },
+  ]
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="app-layout">
       <Sider
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
-        style={{ background: 'white' }}
+        className="app-sider"
       >
-        <div className="demo-logo-vertical" />
+        <div className="app-brand">{collapsed ? 'CA' : 'CliniAgil'}</div>
         <Menu
           theme="light"
-          defaultSelectedKeys={['1']}
+          selectedKeys={selectedKeys}
           mode="inline"
-          items={items}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: 0, background: colorBgContainer }} />
-        <Content style={{ margin: '0 16px' }}>
-          <Breadcrumb
-            style={{ margin: '16px 0' }}
-            items={[{ title: 'User' }, { title: 'Bill' }]}
-          />
-          <div
-            style={{
-              padding: 24,
-              minHeight: 360,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG,
-            }}
-          >
-            <DatePickerComponent />
+        <Header style={{ background: colorBgContainer }} className="app-header">
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Typography.Text strong className="app-title">
+              CliniAgil - Gestão
+            </Typography.Text>
+
+            <Space className="app-account-area">
+              <Dropdown
+                menu={{
+                  items: accountMenuItems,
+                  onClick: ({ key }) => {
+                    if (key === 'perfil') {
+                      navigate('/app/perfil')
+                      return
+                    }
+
+                    if (key === 'alterar-senha') {
+                      navigate('/app/alterar-senha')
+                      return
+                    }
+
+                    logout()
+                    navigate('/login', { replace: true })
+                  },
+                }}
+                trigger={['click']}
+              >
+                <Button className="account-trigger">
+                  <Avatar size={24} icon={<UserOutlined />} className="account-avatar" />
+                  <span className="account-label">{sessionUser?.nome ?? 'Conta'}</span>
+                  {roles[0] && <span className="account-role">{roles[0]}</span>}
+                  <DownOutlined className="account-caret" />
+                </Button>
+              </Dropdown>
+            </Space>
+          </Space>
+        </Header>
+        <Content className="app-content">
+          <div style={{ background: colorBgContainer, borderRadius: borderRadiusLG }} className="app-content-box">
+            <Outlet />
           </div>
         </Content>
-        <Footer style={{ textAlign: 'center' }}>
+        <Footer className="app-footer">
           CLIAGIL ©{new Date().getFullYear()} Created by FaDevTeam
         </Footer>
       </Layout>

@@ -1,73 +1,78 @@
-# React + TypeScript + Vite
+# CliniAgil Frontend - Integracao com API
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Configuracao
 
-Currently, two official plugins are available:
+1. Crie o arquivo `.env` na raiz do frontend:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+FRONTEND_API_URL=http://localhost:8081/clinicamedagil-service
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. Caso a variavel nao exista, o frontend usa automaticamente:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+`http://localhost:8081/clinicamedagil-service`
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Autenticacao JWT
+
+- Login: `POST /auth/login`
+- Request:
+
+```json
+{
+  "email": "usuario@dominio.com",
+  "senha": "123456"
+}
+```
+
+- Response:
+
+```json
+{
+  "token": "jwt...",
+  "tipo": "Bearer"
+}
+```
+
+O token e salvo em `localStorage` e enviado automaticamente no header:
+
+`Authorization: Bearer <token>`
+
+## Fluxo implementado
+
+- Tela de login em `/login`
+- Logout no cabecalho da aplicacao
+- Protecao de rotas privadas com redirecionamento para login
+- Controle de acesso por role (UI): `ADMIN`, `ATENDENTE`, `MEDICO`, `USUARIO`
+- Tratamento padronizado para erros `401`, `403`, `404` e `5xx`
+
+## Exemplo funcional completo
+
+1. Acesse `/login` e autentique.
+2. Apos login, o sistema redireciona para `/usuarios`.
+3. A pagina `/usuarios` consome:
+   - `GET /usuarios`
+   - `GET /tiposusuarios`
+4. Acoes de criar/editar/excluir ficam visiveis conforme role.
+
+## Camada de servicos
+
+- Cliente central: `src/services/api.ts`
+- Auth: `src/services/authService.ts`
+- CRUD:
+  - `src/services/userService.ts`
+  - `src/services/tipoUsuarioService.ts`
+  - `src/services/perfilService.ts`
+  - `src/services/nivelAcessoService.ts`
+  - `src/services/especialidadeService.ts`
+  - `src/services/agendamentoService.ts`
+  - `src/services/agendaMedicoService.ts`
+  - `src/services/consultaService.ts`
+  - `src/services/horarioAgendaService.ts`
+  - `src/services/medicoEspecialidadeService.ts` (rota composta)
+
+## Rodar projeto
+
+```bash
+npm install
+npm run dev
 ```

@@ -3,14 +3,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import type { GetProps } from 'antd'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 
-type RangePickerProps = GetProps<typeof DatePicker.RangePicker>
-
 dayjs.extend(customParseFormat)
-
-const disabledDate: RangePickerProps['disabledDate'] = (current) => {
-  // Can not select days before today and today
-  return current && current < dayjs().endOf('day')
-}
 
 const disabledDate2 = (date: Dayjs, info: GetProps<typeof DatePicker>) => {
   if (info.type === 'date') {

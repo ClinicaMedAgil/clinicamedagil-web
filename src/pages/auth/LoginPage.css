@@ -1,0 +1,141 @@
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  background: #f4f5f5;
+}
+
+.auth-left-panel {
+  padding: 64px 36px 24px;
+  background: #f4f5f5;
+  border-right: 1px solid #e4e4e4;
+}
+
+.auth-title {
+  margin-bottom: 0 !important;
+  color: #21313a !important;
+}
+
+.auth-subtitle {
+  margin-bottom: 24px !important;
+  color: #6d777a !important;
+}
+
+.auth-subtitle span {
+  color: #0e7a69;
+  font-weight: 600;
+}
+
+.auth-link-action {
+  color: #0e7a69;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-submit {
+  margin-top: 8px;
+  height: 42px;
+  border-radius: 8px;
+  background: #1f7a69;
+  border-color: #1f7a69;
+}
+
+.auth-right-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 90px 48px 48px;
+  background: linear-gradient(120deg, #0f5f57 5%, #1ea99a 58%, #29c6b5 100%);
+}
+
+.auth-right-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, 0.15), transparent 35%),
+    radial-gradient(circle at 92% 32%, rgba(255, 255, 255, 0.12), transparent 25%);
+}
+
+.brand-row,
+.hero-call,
+.hero-subcall,
+.hero-list {
+  position: relative;
+  z-index: 1;
+}
+
+.brand-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.brand-icon {
+  color: #d6fff8;
+  font-size: 30px;
+}
+
+.hero-call {
+  max-width: 520px;
+  margin: 0 0 8px !important;
+  color: #fff !important;
+  font-size: 42px !important;
+  line-height: 1.1 !important;
+}
+
+.hero-subcall {
+  color: #daf7f3 !important;
+  max-width: 520px;
+  margin-bottom: 18px !important;
+}
+
+.hero-list {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.hero-list-item {
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.doctor-visual {
+  position: absolute;
+  right: 20px;
+  bottom: 0;
+  width: min(500px, 55%);
+  z-index: 1;
+}
+
+.doctor-visual-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(-16px 6px 24px rgba(0, 0, 0, 0.25));
+}
+
+@media (max-width: 980px) {
+  .auth-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-right-panel {
+    min-height: 460px;
+  }
+
+  .hero-call {
+    font-size: 32px !important;
+  }
+
+  .doctor-visual {
+    width: min(360px, 70%);
+  }
+}

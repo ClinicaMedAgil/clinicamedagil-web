@@ -1,0 +1,58 @@
+.users-list-card .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #164e47;
+}
+
+.users-primary-btn {
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.22);
+}
+
+.users-table .ant-table {
+  border: 1px solid #e4efec;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.users-table .ant-table-thead > tr > th {
+  background: #f1f8f6;
+  color: #1f4e48;
+  font-weight: 700;
+  border-bottom: 1px solid #deece8;
+}
+
+.users-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #eef4f2;
+}
+
+.users-row-even > td {
+  background: #ffffff;
+}
+
+.users-row-odd > td {
+  background: #fcfefe;
+}
+
+.users-table .ant-table-tbody > tr:hover > td {
+  background: #edf8f5 !important;
+}
+
+.users-action-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.users-action-btn.edit {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.users-action-btn.delete {
+  color: #dc2626 !important;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.users-table .ant-pagination {
+  margin-top: 18px;
+}

@@ -1,0 +1,71 @@
+.profile-card {
+  border: 1px solid #e5efec;
+}
+
+.profile-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-avatar {
+  background: linear-gradient(120deg, #0f766e, #2aa89d) !important;
+}
+
+.profile-role-tag {
+  border: none !important;
+  color: #0f766e !important;
+  background: rgba(15, 118, 110, 0.12) !important;
+  font-weight: 700;
+  border-radius: 999px;
+  padding-inline: 10px;
+}
+
+.profile-meta {
+  align-items: flex-end;
+}
+
+.profile-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-form .ant-form-item-label > label {
+  color: #1f4e48;
+  font-weight: 600;
+}
+
+.profile-form .ant-input[readonly] {
+  background: #f6fbfa;
+  color: #325752;
+  border-color: #deebe8;
+}
+
+.profile-loading {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+}
+
+.profile-footnote {
+  margin-top: 16px;
+  margin-bottom: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .profile-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-meta {
+    align-items: flex-start;
+  }
+
+  .profile-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
