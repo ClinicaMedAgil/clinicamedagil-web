@@ -21,3 +21,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+<<<<<<< HEAD
+=======
+# reenviando
+>>>>>>> e1e3837196b587f210536ac9dc8677a54b6bbf9a
