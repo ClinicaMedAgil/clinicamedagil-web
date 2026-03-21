@@ -193,7 +193,6 @@ interface AgendamentoOption {
 
 interface ConsultaCreateFormValues extends ConsultaFormValues {
   especialidadeId?: number
-  nomeEspecialidadeBusca?: string
 }
 
 const getRoleName = (value: unknown): string => {
@@ -214,20 +213,37 @@ const isTipo = (user: UsuarioDTO, token: string): boolean => {
   return fromTipoNome.includes(token) || fromRole.includes(token)
 }
 
+/** Suporta DTO plano ou aninhado ({ medico: { id }, especialidade: { id } }) como no GET /medicoespecialidade */
+const getMedicoEspecialidadeLinkIds = (
+  item: MedicoEspecialidadeDTO
+): { medicoId: number | null; especialidadeId: number | null } => {
+  const raw = asRecord(item)
+  const medicoId =
+    getNumberField(raw, 'medicoId', 'idMedico') ?? getNumberField(asRecord(raw.medico), 'id', 'medicoId')
+  const especialidadeId =
+    getNumberField(raw, 'especialidadeId', 'idEspecialidade') ??
+    getNumberField(asRecord(raw.especialidade), 'id', 'especialidadeId')
+
+  return {
+    medicoId: medicoId !== null && medicoId > 0 ? medicoId : null,
+    especialidadeId: especialidadeId !== null && especialidadeId > 0 ? especialidadeId : null,
+  }
+}
+
 const mapMedicosFromCatalog = (items: MedicoEspecialidadeDTO[]): { value: number; label: string }[] => {
   const seen = new Set<number>()
   const out: { value: number; label: string }[] = []
   for (const item of items) {
-    const id = Number(item.medicoId)
-    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) {
+    const { medicoId: mid } = getMedicoEspecialidadeLinkIds(item)
+    if (!mid || seen.has(mid)) {
       continue
     }
-    seen.add(id)
+    seen.add(mid)
     const raw = asRecord(item)
     const medico = asRecord(raw.medico)
     const nome =
       getStringField(medico, 'nome') ?? getStringField(raw, 'nomeMedico', 'medicoNome') ?? null
-    out.push({ value: id, label: nome ?? `Médico #${id}` })
+    out.push({ value: mid, label: nome ?? `Médico #${mid}` })
   }
   return out.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
 }
@@ -449,7 +465,12 @@ const ConsultaCalendarPage = () => {
       )
       setEspecialidades(especialidadesData)
       setMedicoEspecialidades(
-        medicoEspecialidadeData.filter((item) => item.medicoId > 0 && item.especialidadeId > 0)
+        medicoEspecialidadeData
+          .map((item) => getMedicoEspecialidadeLinkIds(item))
+          .filter(
+            (link): link is { medicoId: number; especialidadeId: number } =>
+              link.medicoId !== null && link.especialidadeId !== null
+          )
       )
 
       try {
@@ -549,7 +570,12 @@ const ConsultaCalendarPage = () => {
         if (!alive) {
           return
         }
-        setPacienteMedicos(mapMedicosFromCatalog(data))
+        const espId = Number(selectedEspecialidadeId)
+        const filtrados = data.filter((row) => {
+          const { especialidadeId: eid } = getMedicoEspecialidadeLinkIds(row)
+          return eid !== null && eid === espId
+        })
+        setPacienteMedicos(mapMedicosFromCatalog(filtrados))
       })
       .catch((requestError) => {
         if (!alive) {
@@ -608,18 +634,22 @@ const ConsultaCalendarPage = () => {
     if (isPaciente) {
       return pacienteMedicos
     }
-    if (!selectedEspecialidadeId) {
+    const espId = Number(selectedEspecialidadeId)
+    if (!Number.isFinite(espId) || espId <= 0) {
       return []
     }
     const allowedMedicos = new Set(
       medicoEspecialidades
-        .filter((item) => item.especialidadeId === selectedEspecialidadeId)
-        .map((item) => item.medicoId)
+        .filter((item) => Number(item.especialidadeId) === espId)
+        .map((item) => Number(item.medicoId))
     )
     return medicos
-      .filter((item) => Number(item.id) > 0 && allowedMedicos.has(Number(item.id)))
+      .filter((item) => {
+        const id = Number(item.id)
+        return id > 0 && allowedMedicos.has(id)
+      })
       .map((item) => ({ value: Number(item.id), label: item.nome }))
-  }, [isPaciente, medicoEspecialidades, medicos, pacienteMedicos])
+  }, [isPaciente, medicoEspecialidades, medicos, pacienteMedicos, selectedEspecialidadeId])
 
   const agendamentosDisponiveis = useMemo(() => {
     if (isPaciente) {
@@ -718,35 +748,6 @@ const ConsultaCalendarPage = () => {
     setPacienteSlots([])
   }
 
-  const handleBuscarMedicosPorNome = async () => {
-    const nome = String(createForm.getFieldValue('nomeEspecialidadeBusca') ?? '').trim()
-    if (!nome) {
-      message.warning('Informe o nome da especialidade.')
-      return
-    }
-    setLoadingCatalogMedicos(true)
-    createForm.setFields([{ name: 'nomeEspecialidadeBusca', errors: [] }])
-    try {
-      const data = await pacienteAgendamentoCatalogoService.listMedicosPorNomeEspecialidade(nome)
-      setPacienteMedicos(mapMedicosFromCatalog(data))
-      createForm.setFieldsValue({
-        especialidadeId: undefined,
-        medicoId: undefined,
-        agendamentoId: undefined,
-      })
-      setPacienteSlots([])
-    } catch (requestError) {
-      setPacienteMedicos([])
-      const parsed = parseConsultaApiError(requestError)
-      if (parsed.status === 422 && parsed.fieldErrors.nome) {
-        createForm.setFields([{ name: 'nomeEspecialidadeBusca', errors: [parsed.fieldErrors.nome] }])
-      }
-      message.error(parsed.message)
-    } finally {
-      setLoadingCatalogMedicos(false)
-    }
-  }
-
   const apply422Errors = (fieldErrors: Record<string, string>) => {
     const fieldMap: Record<string, keyof ConsultaCreateFormValues> = {
       agendamentoId: 'agendamentoId',
@@ -760,7 +761,6 @@ const ConsultaCalendarPage = () => {
       diagnostico: 'diagnostico',
       prescricao: 'prescricao',
       observacoes: 'observacoes',
-      nome: 'nomeEspecialidadeBusca',
     }
     const fields = Object.entries(fieldErrors)
       .map(([name, errorMessage]) => {
@@ -785,8 +785,12 @@ const ConsultaCalendarPage = () => {
       }
 
       if (isPaciente) {
+        if (!isValidPositiveNumber(values.especialidadeId)) {
+          message.error('Selecione a especialidade.')
+          return
+        }
         if (pacienteMedicos.length === 0) {
-          message.error('Escolha uma especialidade na lista ou busque médicos pelo nome da especialidade.')
+          message.error('Não há médicos disponíveis para esta especialidade. Escolha outra ou aguarde o carregamento.')
           return
         }
 
@@ -1119,24 +1123,19 @@ const ConsultaCalendarPage = () => {
           >
             <Form.Item
               name="especialidadeId"
-              label={isPaciente ? 'Especialidade (ou use a busca abaixo)' : 'Especialidade'}
-              rules={
-                isPaciente
-                  ? []
-                  : [{ required: true, message: 'Selecione a especialidade.' }]
-              }
+              label="Especialidade"
+              rules={[{ required: true, message: 'Selecione a especialidade.' }]}
             >
               <Select
                 allowClear
                 placeholder="Selecione a especialidade"
                 options={especialidadeOptions.filter((item) => Number.isFinite(item.value) && item.value > 0)}
-                onChange={(value) => {
+                onChange={() => {
                   createForm.setFieldsValue({
                     medicoId: undefined,
                     agendamentoId: undefined,
-                    nomeEspecialidadeBusca: undefined,
                   })
-                  if (isPaciente && value === undefined) {
+                  if (isPaciente) {
                     setPacienteMedicos([])
                     setPacienteSlots([])
                   }
@@ -1144,38 +1143,18 @@ const ConsultaCalendarPage = () => {
               />
             </Form.Item>
 
-            {isPaciente && (
-              <Form.Item
-                label="Buscar médicos pelo nome da especialidade"
-                tooltip="Alternativa à lista. Se a busca for ambígua, use o nome completo da especialidade."
-              >
-                <Space.Compact style={{ width: '100%' }}>
-                  <Form.Item name="nomeEspecialidadeBusca" noStyle>
-                    <Input placeholder="Ex.: Cardiologia" allowClear style={{ width: '100%' }} />
-                  </Form.Item>
-                  <Button
-                    type="default"
-                    loading={loadingCatalogMedicos}
-                    onClick={() => void handleBuscarMedicosPorNome()}
-                  >
-                    Buscar
-                  </Button>
-                </Space.Compact>
-              </Form.Item>
-            )}
-
             <Form.Item name="medicoId" label="Médico" rules={[{ required: true, message: 'Selecione o médico.' }]}>
               <Select
                 placeholder={
-                  isPaciente
-                    ? medicosDisponiveis.length
-                      ? 'Selecione o médico'
-                      : 'Escolha especialidade ou busque pelo nome'
-                    : selectedEspecialidadeId
-                      ? 'Selecione o médico'
-                      : 'Escolha a especialidade primeiro'
+                  !selectedEspecialidadeId
+                    ? 'Escolha a especialidade primeiro'
+                    : loadingCatalogMedicos && isPaciente
+                      ? 'Carregando médicos…'
+                      : medicosDisponiveis.length
+                        ? 'Selecione o médico'
+                        : 'Nenhum médico disponível para esta especialidade'
                 }
-                disabled={isPaciente ? medicosDisponiveis.length === 0 && !loadingCatalogMedicos : !selectedEspecialidadeId}
+                disabled={!selectedEspecialidadeId}
                 loading={isPaciente && loadingCatalogMedicos}
                 options={medicosDisponiveis}
                 onChange={() => createForm.setFieldValue('agendamentoId', undefined)}
