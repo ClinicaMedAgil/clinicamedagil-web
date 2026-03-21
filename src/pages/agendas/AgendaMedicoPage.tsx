@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { agendaMedicoService } from '../../services/agendaMedicoService'
 import { especialidadeService } from '../../services/especialidadeService'
 import { horarioAgendaService } from '../../services/horarioAgendaService'
+import { medicoEspecialidadeService } from '../../services/medicoEspecialidadeService'
 import { tipoUsuarioService } from '../../services/tipoUsuarioService'
 import { userService } from '../../services/userService'
 import type {
@@ -32,6 +33,7 @@ import type {
   EspecialidadeDTO,
   HorarioAgendaDTO,
   HorarioAgendaPayload,
+  MedicoEspecialidadeDTO,
 } from '../../types/resources'
 import type { UsuarioDTO } from '../../types/user'
 import './AgendaMedicoPage.css'
@@ -171,6 +173,7 @@ const AgendaMedicoPage = () => {
   const [horarios, setHorarios] = useState<HorarioAgendaDTO[]>([])
   const [medicos, setMedicos] = useState<UsuarioDTO[]>([])
   const [especialidades, setEspecialidades] = useState<EspecialidadeDTO[]>([])
+  const [medicoEspecialidades, setMedicoEspecialidades] = useState<MedicoEspecialidadeDTO[]>([])
 
   const [loadingMain, setLoadingMain] = useState(true)
   const [savingAgenda, setSavingAgenda] = useState(false)
@@ -199,11 +202,13 @@ const AgendaMedicoPage = () => {
     setError(null)
 
     try {
-      const [agendasData, usuariosData, especialidadesData, tiposUsuarioData] = await Promise.all([
+      const [agendasData, usuariosData, especialidadesData, tiposUsuarioData, medicoEspecialidadesData] =
+        await Promise.all([
         agendaMedicoService.list(),
         userService.list(),
         especialidadeService.list(),
         tipoUsuarioService.list(),
+        medicoEspecialidadeService.list(),
       ])
 
       const medicoTipoIds = new Set(
@@ -224,6 +229,7 @@ const AgendaMedicoPage = () => {
         })
       )
       setEspecialidades(especialidadesData)
+      setMedicoEspecialidades(medicoEspecialidadesData)
     } catch (requestError) {
       const parsed = parseApiError(requestError)
       setError(parsed.message || 'Não foi possível carregar os dados da agenda médica.')
@@ -263,10 +269,25 @@ const AgendaMedicoPage = () => {
     () =>
       especialidades.map((especialidade) => ({
         value: toNumber(especialidade.id) ?? 0,
-        label: toString(especialidade.nomeEspecialidade) || `Especialidade #${especialidade.id ?? '-'}`,
+        label:
+          toString(especialidade.nomeEspecialidade) ||
+          toString(especialidade.descricao) ||
+          `Especialidade #${especialidade.id ?? '-'}`,
       })),
     [especialidades]
   )
+
+  const especialidadeByMedicoId = useMemo(() => {
+    const map = new Map<number, number>()
+    medicoEspecialidades.forEach((item) => {
+      const medicoId = toNumber(item.medicoId)
+      const especialidadeId = toNumber(item.especialidadeId)
+      if (medicoId && especialidadeId && !map.has(medicoId)) {
+        map.set(medicoId, especialidadeId)
+      }
+    })
+    return map
+  }, [medicoEspecialidades])
 
   const agendasFiltradas = useMemo(() => {
     if (!agendaFilterMedicoId) {
@@ -299,12 +320,22 @@ const AgendaMedicoPage = () => {
     return horarios.filter((horario) => toNumber(horario.agendaId) === selectedAgendaId)
   }, [horarios, selectedAgendaId])
 
-  const getMedicoNome = (medicoId: number): string => {
+  const getMedicoNome = (agenda: AgendaMedicoDTO): string => {
+    const fromDto = toString(agenda.nomeMedico).trim()
+    if (fromDto) {
+      return fromDto
+    }
+    const medicoId = toNumber(agenda.medicoId) ?? 0
     const medico = medicos.find((item) => item.id === medicoId)
     return medico?.nome ?? `Médico #${medicoId}`
   }
 
-  const getEspecialidadeNome = (especialidadeId: number): string => {
+  const getEspecialidadeNome = (agenda: AgendaMedicoDTO): string => {
+    const fromDto = toString(agenda.nomeEspecialidade).trim()
+    if (fromDto) {
+      return fromDto
+    }
+    const especialidadeId = toNumber(agenda.especialidadeId) ?? 0
     const especialidade = especialidades.find((item) => toNumber(item.id) === especialidadeId)
     return toString(especialidade?.nomeEspecialidade) || `Especialidade #${especialidadeId}`
   }
@@ -592,12 +623,12 @@ const AgendaMedicoPage = () => {
     {
       title: 'Médico',
       key: 'medico',
-      render: (_, record) => getMedicoNome(toNumber(record.medicoId) ?? 0),
+      render: (_, record) => getMedicoNome(record),
     },
     {
       title: 'Especialidade',
       key: 'especialidade',
-      render: (_, record) => getEspecialidadeNome(toNumber(record.especialidadeId) ?? 0),
+      render: (_, record) => getEspecialidadeNome(record),
     },
     {
       title: 'Data',
@@ -730,6 +761,17 @@ const AgendaMedicoPage = () => {
     []
   )
 
+  useEffect(() => {
+    if (!agendaModalOpen || !watchedAgendaMedicoId) {
+      return
+    }
+
+    const especialidadeId = especialidadeByMedicoId.get(watchedAgendaMedicoId)
+    if (especialidadeId) {
+      agendaForm.setFieldValue('especialidadeId', especialidadeId)
+    }
+  }, [agendaForm, agendaModalOpen, especialidadeByMedicoId, watchedAgendaMedicoId])
+
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       {error && (
@@ -859,7 +901,13 @@ const AgendaMedicoPage = () => {
       >
         <Form<AgendaFormValues> layout="vertical" form={agendaForm} onFinish={handleSubmitAgenda}>
           <Form.Item name="medicoId" label="Médico" rules={[{ required: true, message: 'Informe o médico.' }]}>
-            <Select placeholder="Selecione o médico" options={medicosOptions.filter((option) => option.value)} />
+            <Select
+              placeholder="Selecione o médico"
+              options={medicosOptions.filter((option) => option.value)}
+              onChange={() => {
+                agendaForm.setFieldValue('especialidadeId', undefined)
+              }}
+            />
           </Form.Item>
 
           <Form.Item

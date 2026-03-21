@@ -7,8 +7,14 @@ import type {
   UserRole,
 } from '../types/user'
 
+const USER_ROLE_SET: ReadonlySet<UserRole> = new Set(['ADMIN', 'ATENDENTE', 'MEDICO', 'PACIENTE'])
+
 const normalizeRole = (value: unknown): UserRole | null => {
-  const text = String(value).trim().toUpperCase()
+  const text = String(value)
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
 
   if (!text) {
     return null
@@ -28,7 +34,15 @@ const normalizeRole = (value: unknown): UserRole | null => {
     return 'ATENDENTE'
   }
 
-  if (cleaned === 'MEDICO' || cleaned.includes('MEDIC')) {
+  /** Alguns JWTs usam inglês ou sinônimos; não confundir com substring "USER" em "MEDICO". */
+  if (
+    cleaned === 'MEDICO' ||
+    cleaned.includes('MEDIC') ||
+    cleaned === 'DOCTOR' ||
+    cleaned.includes('DOCTOR') ||
+    cleaned === 'PHYSICIAN' ||
+    cleaned.includes('PHYSICIAN')
+  ) {
     return 'MEDICO'
   }
 
@@ -36,13 +50,18 @@ const normalizeRole = (value: unknown): UserRole | null => {
     cleaned === 'PACIENTE' ||
     cleaned.includes('PACIENTE') ||
     cleaned === 'USUARIO' ||
-    cleaned.includes('USER') ||
-    cleaned.includes('USUARIO')
+    cleaned.includes('USUARIO') ||
+    (cleaned.includes('USER') && !cleaned.includes('MEDIC'))
   ) {
     return 'PACIENTE'
   }
 
   return null
+}
+
+const toRoleFromTokenString = (value: unknown): UserRole | null => {
+  const normalized = normalizeRole(value)
+  return normalized && USER_ROLE_SET.has(normalized) ? normalized : null
 }
 
 const parseJwtPayload = (token: string): Record<string, unknown> | null => {
@@ -62,69 +81,72 @@ const parseJwtPayload = (token: string): Record<string, unknown> | null => {
   }
 }
 
+/** Quando o JWT mistura claims (ex.: tipo no cadastro + authorities), um único papel “ganha” na UI. */
+const ROLE_PRIORITY: Record<UserRole, number> = {
+  ADMIN: 0,
+  ATENDENTE: 1,
+  MEDICO: 2,
+  PACIENTE: 3,
+}
+
+const sortRolesByPriority = (roles: UserRole[]): UserRole[] =>
+  [...roles].sort((a, b) => ROLE_PRIORITY[a] - ROLE_PRIORITY[b])
+
+const toFlatTokens = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => toFlatTokens(item))
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[,\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return [
+      ...toFlatTokens(record.authority),
+      ...toFlatTokens(record.authorities),
+      ...toFlatTokens(record.role),
+      ...toFlatTokens(record.roles),
+    ]
+  }
+
+  return []
+}
+
 const extractRoles = (payload: Record<string, unknown> | null): UserRole[] => {
   if (!payload) {
     return []
   }
 
-  const toRoleCandidates = (value: unknown): unknown[] => {
-    if (Array.isArray(value)) {
-      return value
-    }
-
-    if (typeof value === 'string') {
-      return value.split(/[,\s]+/).filter(Boolean)
-    }
-
-    if (value && typeof value === 'object') {
-      const roleObject = value as Record<string, unknown>
-      return [
-        roleObject.authority,
-        roleObject.role,
-        roleObject.roles,
-        roleObject.nome,
-        roleObject.name,
-        roleObject.tipo,
-        roleObject.tipoUsuario,
-        roleObject.descricao,
-      ].filter(Boolean)
-    }
-
-    return []
-  }
-
-  const resourceAccessRoles = (() => {
-    const resourceAccess = payload.resource_access
-
-    if (!resourceAccess || typeof resourceAccess !== 'object') {
-      return []
-    }
-
-    return Object.values(resourceAccess as Record<string, unknown>).flatMap((entry) =>
-      toRoleCandidates(entry).flatMap((candidate) => toRoleCandidates(candidate))
-    )
-  })()
-
-  const roleCandidates = [
+  const roleCandidates: string[] = [
     payload.roles,
     payload.authorities,
-    payload.perfis,
     payload.role,
-    payload.tipoUsuario,
-    payload.tipo,
-    payload.perfil,
-    payload.userRole,
-    payload.nivelAcesso,
-    payload.scope,
-    payload.scopes,
-    payload.grupos,
     (payload.realm_access as Record<string, unknown> | undefined)?.roles,
-    resourceAccessRoles,
-  ].flatMap((value) => {
-    return toRoleCandidates(value).flatMap((candidate) => toRoleCandidates(candidate))
-  })
+  ].flatMap((value) => toFlatTokens(value))
 
-  return Array.from(new Set(roleCandidates.map(normalizeRole).filter((item): item is UserRole => item !== null)))
+  const resourceAccess = payload.resource_access
+  if (resourceAccess && typeof resourceAccess === 'object') {
+    Object.values(resourceAccess as Record<string, unknown>).forEach((clientEntry) => {
+      if (!clientEntry || typeof clientEntry !== 'object') {
+        return
+      }
+      const entry = clientEntry as Record<string, unknown>
+      roleCandidates.push(...toFlatTokens(entry.roles))
+      roleCandidates.push(...toFlatTokens(entry.authorities))
+      roleCandidates.push(...toFlatTokens(entry.role))
+    })
+  }
+
+  return sortRolesByPriority(
+    Array.from(
+      new Set(roleCandidates.map(toRoleFromTokenString).filter((item): item is UserRole => item !== null))
+    )
+  )
 }
 
 export const authService = {
@@ -149,23 +171,22 @@ export const authService = {
   getRoles(): UserRole[] {
     const token = authStorage.getToken()
     const payload = token ? parseJwtPayload(token) : null
-    const tokenRoles = extractRoles(payload)
+    return extractRoles(payload)
+  },
 
-    if (tokenRoles.length > 0) {
-      return tokenRoles
+  /** Rótulo curto em português para o papel usado na UI (header, perfil). */
+  getPrimaryRoleLabel(): string | null {
+    const [first] = this.getRoles()
+    if (!first) {
+      return null
     }
-
-    try {
-      const raw = authStorage.getSessionUserRaw()
-      if (!raw) {
-        return []
-      }
-      const user = JSON.parse(raw) as Record<string, unknown>
-      const role = normalizeRole(user.role)
-      return role ? [role] : []
-    } catch {
-      return []
+    const labels: Record<UserRole, string> = {
+      ADMIN: 'Administrador',
+      ATENDENTE: 'Atendente',
+      MEDICO: 'Médico',
+      PACIENTE: 'Paciente',
     }
+    return labels[first] ?? first
   },
 
   getSessionUser(): SessionUser | null {
@@ -183,6 +204,8 @@ export const authService = {
     if (!payload && !storedUser) {
       return null
     }
+
+    const [primaryRole] = this.getRoles()
 
     return {
       id:
@@ -202,9 +225,7 @@ export const authService = {
         (storedUser?.cpf as string | undefined) ??
         (payload?.cpf as string | undefined) ??
         (payload?.documento as string | undefined),
-      role:
-        (storedUser?.role as string | undefined) ??
-        (payload?.role as string | undefined),
+      role: primaryRole ?? (storedUser?.role as string | undefined) ?? (payload?.role as string | undefined),
       telefone:
         (payload?.telefone as string | undefined) ??
         (payload?.phone as string | undefined) ??

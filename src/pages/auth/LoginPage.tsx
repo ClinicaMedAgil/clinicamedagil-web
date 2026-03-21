@@ -23,6 +23,10 @@ const getDefaultRouteByRole = (roles: UserRole[]): string => {
     return '/app/perfil'
   }
 
+  if (roles.includes('PACIENTE')) {
+    return '/app/consultas'
+  }
+
   return '/app/perfil'
 }
 

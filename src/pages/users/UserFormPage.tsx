@@ -6,9 +6,11 @@ import { useAuth } from '../../hooks/useAuth'
 import { especialidadeService } from '../../services/especialidadeService'
 import { medicoEspecialidadeService } from '../../services/medicoEspecialidadeService'
 import { tipoUsuarioService } from '../../services/tipoUsuarioService'
+import { perfilService } from '../../services/perfilService'
 import { userService } from '../../services/userService'
-import type { EspecialidadeDTO } from '../../types/resources'
+import type { EspecialidadeDTO, PerfilDTO } from '../../types/resources'
 import type { TipoUsuarioDTO, UsuarioDTO } from '../../types/user'
+import { findPerfilIdForTipoUsuarioNome } from '../../utils/usuarioPerfilResolve'
 import { parseUsuario409 } from '../../utils/usuarioApiConflict'
 
 const normalizeText = (value: string): string =>
@@ -51,6 +53,7 @@ const UserFormPage = () => {
   const [loadingPage, setLoadingPage] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tiposUsuario, setTiposUsuario] = useState<TipoUsuarioDTO[]>([])
+  const [perfis, setPerfis] = useState<PerfilDTO[]>([])
   const [especialidades, setEspecialidades] = useState<EspecialidadeDTO[]>([])
   const [initialValues, setInitialValues] = useState<Partial<UsuarioDTO>>({})
   const [error, setError] = useState<string | null>(null)
@@ -69,12 +72,14 @@ const UserFormPage = () => {
         const especialidadesPromise = especialidadeService.list()
 
         if (isEditMode && id) {
-          const [tipos, usuario, especialidadesData, links] = await Promise.all([
+          const [tipos, perfisData, usuario, especialidadesData, links] = await Promise.all([
             tiposPromise,
+            perfilService.list(),
             userService.getById(Number(id)),
             especialidadesPromise,
             medicoEspecialidadeService.list(),
           ])
+          setPerfis(perfisData)
           const especialidadeIds = links
             .map((item) => extractLinkIds(item))
             .filter((item) => item.medicoId === Number(id) && item.especialidadeId !== null)
@@ -83,8 +88,13 @@ const UserFormPage = () => {
           setEspecialidades(especialidadesData)
           setInitialValues({ ...usuario, especialidadeId: especialidadeIds[0] })
         } else {
-          const [tipos, especialidadesData] = await Promise.all([tiposPromise, especialidadesPromise])
+          const [tipos, perfisData, especialidadesData] = await Promise.all([
+            tiposPromise,
+            perfilService.list(),
+            especialidadesPromise,
+          ])
           setTiposUsuario(tipos)
+          setPerfis(perfisData)
           setEspecialidades(especialidadesData)
         }
       } catch {
@@ -102,18 +112,29 @@ const UserFormPage = () => {
 
     try {
       const { especialidadeId, senha: _senha, ...userPayload } = values
+      const tipoNome = tiposUsuario.find((x) => x.id === userPayload.tipoUsuarioId)?.nome ?? ''
+      const perfilIdResolved = tipoNome ? findPerfilIdForTipoUsuarioNome(tipoNome, perfis) : undefined
+      const userPayloadWithPerfil: UsuarioDTO = {
+        ...userPayload,
+        ...(perfilIdResolved != null ? { perfilId: perfilIdResolved } : {}),
+      }
       const normalizedEspecialidadeId = Number(especialidadeId)
       const hasEspecialidade = Number.isFinite(normalizedEspecialidadeId) && normalizedEspecialidadeId > 0
       const medicoTipoId = getMedicoTipoId()
       const isMedico = Boolean(medicoTipoId && userPayload.tipoUsuarioId === medicoTipoId)
+      if (isMedico && perfilIdResolved == null) {
+        message.warning(
+          'Não foi encontrado um perfil correspondente a “Médico” na lista de perfis. Revise o cadastro de perfis no sistema.'
+        )
+      }
       let savedUserId: number | null = null
 
       if (isEditMode && id) {
-        const updated = await userService.update(Number(id), userPayload)
+        const updated = await userService.update(Number(id), userPayloadWithPerfil)
         savedUserId = updated.id ?? Number(id)
         message.success('Usuário atualizado com sucesso!')
       } else {
-        const created = await userService.create(userPayload)
+        const created = await userService.create(userPayloadWithPerfil)
         savedUserId = created.id ?? null
         message.success('Usuário cadastrado com sucesso!')
       }

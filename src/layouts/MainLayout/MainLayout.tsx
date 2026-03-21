@@ -1,10 +1,11 @@
 import {
   AppstoreOutlined,
-  ClockCircleOutlined,
   CalendarOutlined,
+  ClockCircleOutlined,
   DownOutlined,
   LockOutlined,
   LogoutOutlined,
+  ScheduleOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -41,15 +42,27 @@ const MainLayout = () => {
   const navigate = useNavigate()
   const { logout, roles, hasAnyRole } = useAuth()
   const sessionUser = useMemo(() => authService.getSessionUser(), [roles])
+  const papelExibido = useMemo(
+    () => authService.getPrimaryRoleLabel() ?? roles[0] ?? '',
+    [roles]
+  )
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken()
   const menuItems = useMemo<MenuItem[]>(() => {
-    const baseItems: MenuItem[] = [getItem('Consultas', '/app/consultas', <CalendarOutlined />)]
+    const baseItems: MenuItem[] = []
 
     if (hasAnyRole(['ADMIN', 'ATENDENTE'])) {
-      baseItems.unshift(getItem('Usuários', '/app/usuarios', <TeamOutlined />))
+      baseItems.push(getItem('Usuários', '/app/usuarios', <TeamOutlined />))
       baseItems.push(getItem('Agenda do Médico', '/app/agendas-medico', <ClockCircleOutlined />))
+    }
+
+    if (hasAnyRole(['ADMIN', 'ATENDENTE', 'PACIENTE', 'MEDICO'])) {
+      baseItems.push(getItem('Minhas consultas', '/app/consultas', <CalendarOutlined />))
+    }
+
+    if (hasAnyRole(['ADMIN', 'ATENDENTE', 'PACIENTE'])) {
+      baseItems.push(getItem('Agendar consulta', '/app/consultas/agendar', <ScheduleOutlined />))
     }
 
     if (hasAnyRole(['ADMIN'])) {
@@ -68,15 +81,19 @@ const MainLayout = () => {
       return ['/app/especialidades']
     }
 
-    if (location.pathname.startsWith('/app/consultas')) {
-      return ['/app/consultas']
-    }
-
     if (location.pathname.startsWith('/app/agendas-medico')) {
       return ['/app/agendas-medico']
     }
 
-    return ['/app/consultas']
+    if (location.pathname.startsWith('/app/consultas/agendar')) {
+      return ['/app/consultas/agendar']
+    }
+
+    if (location.pathname.startsWith('/app/consultas')) {
+      return ['/app/consultas']
+    }
+
+    return []
   }, [location.pathname])
 
   const accountMenuItems: MenuProps['items'] = [
@@ -134,7 +151,7 @@ const MainLayout = () => {
                 <Button className="account-trigger">
                   <Avatar size={24} icon={<UserOutlined />} className="account-avatar" />
                   <span className="account-label">{sessionUser?.nome ?? 'Conta'}</span>
-                  {roles[0] && <span className="account-role">{roles[0]}</span>}
+                  {papelExibido ? <span className="account-role">{papelExibido}</span> : null}
                   <DownOutlined className="account-caret" />
                 </Button>
               </Dropdown>

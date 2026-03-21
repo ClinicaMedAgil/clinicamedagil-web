@@ -1,0 +1,10 @@
+.consultas-cal-wrap .ant-picker-calendar-date-content {
+  min-height: 48px;
+}
+
+.consultas-cal-badge-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+  cursor: pointer;
+}

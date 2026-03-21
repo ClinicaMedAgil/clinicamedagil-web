@@ -1,3 +1,6 @@
+# Gerado no start pelo entrypoint do nginx (envsubst): BACKEND_HOST / BACKEND_PORT.
+# Por padrão o Spring expõe :8080 — o proxy repassa o URI completo /clinicamedagil-service/...
+
 server {
     listen 80;
     server_name localhost;

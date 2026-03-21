@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter } from 'react-router'
+import { Navigate, Outlet, createBrowserRouter } from 'react-router'
 import MainLayout from '../layouts/MainLayout/MainLayout'
 import Home from '../pages/Home'
 import ChangePasswordPage from '../pages/account/ChangePasswordPage'
@@ -7,7 +7,8 @@ import ProfilePage from '../pages/account/ProfilePage'
 import ForbiddenPage from '../pages/auth/ForbiddenPage'
 import LoginPage from '../pages/auth/LoginPage'
 import RegisterPage from '../pages/auth/RegisterPage'
-import ConsultaCalendarPage from '../pages/consultas/ConsultaCalendarPage'
+import ConsultaAgendarPage from '../pages/consultas/ConsultaAgendarPage'
+import ConsultasEntryPage from '../pages/consultas/ConsultasEntryPage'
 import EspecialidadeListPage from '../pages/especialidades/EspecialidadeListPage'
 import UserFormPage from '../pages/users/UserFormPage'
 import UserListPage from '../pages/users/UserListPage'
@@ -40,7 +41,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/app/consultas" replace />,
+        element: <Navigate to="/app/perfil" replace />,
       },
       {
         path: 'usuarios',
@@ -59,20 +60,34 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'consultas',
-        element: (
-          <ProtectedRoute>
-            <ConsultaCalendarPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
         path: 'agendas-medico',
         element: (
           <ProtectedRoute requiredRoles={['ADMIN', 'ATENDENTE']}>
             <AgendaMedicoPage />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: 'consultas',
+        element: (
+          <ProtectedRoute requiredRoles={['ADMIN', 'ATENDENTE', 'PACIENTE', 'MEDICO']}>
+            <Outlet />
+          </ProtectedRoute>
+        ),
+        children: [
+          {
+            index: true,
+            element: <ConsultasEntryPage />,
+          },
+          {
+            path: 'agendar',
+            element: (
+              <ProtectedRoute requiredRoles={['ADMIN', 'ATENDENTE', 'PACIENTE']}>
+                <ConsultaAgendarPage />
+              </ProtectedRoute>
+            ),
+          },
+        ],
       },
       {
         path: 'usuarios/novo',
