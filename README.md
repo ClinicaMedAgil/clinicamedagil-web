@@ -19,15 +19,15 @@ Responsável por:
 
 ## Configuracao
 
-1. Crie o arquivo `.env` na raiz do frontend:
+1. Crie o arquivo `.env` na raiz do frontend (variável do Vite):
 
 ```env
-FRONTEND_API_URL=http://localhost:8081/clinicamedagil-service
+VITE_FRONTEND_API_URL=/clinicamedagil-service
 ```
 
-2. Caso a variavel nao exista, o frontend usa automaticamente:
+2. Em desenvolvimento local, se a API estiver em outra origem, use a URL completa (ex.: `http://localhost:8081/clinicamedagil-service`).
 
-`http://localhost:8081/clinicamedagil-service`
+3. Na VM com Docker, use `VITE_FRONTEND_API_URL=/clinicamedagil-service` e configure no `docker-compose` (ou `.env` ao lado dele) `BACKEND_HOST` e `BACKEND_PORT` para o endereço onde o Spring Boot escuta **visto de dentro do container do frontend**. O `172.19.0.1` é IP interno da rede Docker, não o IP público da Oracle; o navegador do usuário não deve apontar para ele. O nginx do container encaminha `POST /clinicamedagil-service/...` para a API — sem esse proxy, o nginx devolve **405** para métodos que não são `GET` em arquivos estáticos.
 
 ## Autenticacao JWT
 

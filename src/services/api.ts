@@ -5,7 +5,7 @@ const TOKEN_STORAGE_KEY = 'auth_token'
 const AUTH_TYPE_STORAGE_KEY = 'auth_tipo'
 const SESSION_USER_STORAGE_KEY = 'auth_usuario'
 export const API_BASE_URL =
-  import.meta.env.VITE_FRONTEND_API_URL ?? 'http://172.19.0.1/app'
+  import.meta.env.VITE_FRONTEND_API_URL ?? '/clinicamedagil-service'
 
 export const authStorage = {
   getToken: (): string | null => localStorage.getItem(TOKEN_STORAGE_KEY),
