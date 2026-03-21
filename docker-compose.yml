@@ -18,8 +18,5 @@ services:
     container_name: frontend
     ports:
       - "${HTTP_PORT:-80}:80"
-    environment:
-      # Onde a API Spring escuta, alcançável a partir deste container (não use IP público da Oracle aqui).
-      BACKEND_HOST: ${BACKEND_HOST:-172.17.0.1}
-      BACKEND_PORT: ${BACKEND_PORT:-8080}
+    # Removi as variáveis BACKEND_HOST/PORT daqui pois já fixamos no arquivo do Nginx
     restart: unless-stopped

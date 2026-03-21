@@ -7,6 +7,8 @@ const SESSION_USER_STORAGE_KEY = 'auth_usuario'
 export const API_BASE_URL =
   import.meta.env.VITE_FRONTEND_API_URL ?? '/clinicamedagil-service'
 
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 120_000
+
 export const authStorage = {
   getToken: (): string | null => localStorage.getItem(TOKEN_STORAGE_KEY),
   getAuthType: (): string => localStorage.getItem(AUTH_TYPE_STORAGE_KEY) ?? 'Bearer',
@@ -29,7 +31,7 @@ export const authStorage = {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: API_TIMEOUT_MS,
 })
 
 api.interceptors.request.use((config) => {
@@ -48,6 +50,15 @@ api.interceptors.response.use(
     const status = error?.response?.status as number | undefined
     const requestUrl = String(error?.config?.url ?? '')
     const isLoginRequest = requestUrl.includes('/auth/login')
+    const isTimeout =
+      error?.code === 'ECONNABORTED' ||
+      (typeof error?.message === 'string' && error.message.toLowerCase().includes('timeout'))
+
+    if (isTimeout && !error?.response) {
+      message.error(
+        'O servidor demorou para responder. Verifique se a API está no ar ou tente novamente em instantes.'
+      )
+    }
 
     if (status === 401 && !isLoginRequest) {
       authStorage.clearAuth()
