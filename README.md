@@ -7,7 +7,6 @@ Tecnologias:
 - Node.js
 - Nginx
 - Docker
-- GitHub Actions
 
 Responsável por:
 - interface do usuário
@@ -27,7 +26,11 @@ VITE_FRONTEND_API_URL=/clinicamedagil-service
 
 2. Em desenvolvimento local, se a API estiver em outra origem, use a URL completa (ex.: `http://localhost:8081/clinicamedagil-service`).
 
-3. Na VM com Docker, use `VITE_FRONTEND_API_URL=/clinicamedagil-service` e configure no `docker-compose` (ou `.env` ao lado dele) `BACKEND_HOST` e `BACKEND_PORT` para o endereço onde o Spring Boot escuta **visto de dentro do container do frontend**. O `172.19.0.1` é IP interno da rede Docker, não o IP público da Oracle; o navegador do usuário não deve apontar para ele. O nginx do container encaminha `POST /clinicamedagil-service/...` para a API — sem esse proxy, o nginx devolve **405** para métodos que não são `GET` em arquivos estáticos.
+3. **Produção (Docker):** o frontend e a API ficam em **containers separados**; este repositório só sobe o serviço `web`. Use `VITE_FRONTEND_API_URL=/clinicamedagil-service` e, no `docker-compose` ou `.env` ao lado dele, `BACKEND_HOST` e `BACKEND_PORT` apontando para onde a API é alcançada **de dentro do container do nginx do front**.
+
+   **Oracle / hosts diferentes (ex.: duas VMs):** não há conflito de porta entre front e API — cada host tem o seu `80` no front; a API Spring usa **8080** por padrão. Configure `BACKEND_HOST` com o **IP privado** da VM da API e `BACKEND_PORT=8080` (ou a porta em que o Spring escuta na rede). Ajuste no `.env` ao lado do `docker-compose.yml`.
+
+   O IP público é só para o utilizador abrir o front; o nginx do container encaminha `/clinicamedagil-service/...` para a API — sem esse proxy, o nginx devolve **405** em métodos que não são `GET` em estáticos.
 
 ## Autenticacao JWT
 

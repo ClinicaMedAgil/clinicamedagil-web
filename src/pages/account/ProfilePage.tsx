@@ -14,6 +14,7 @@ import {
 } from 'antd'
 import { MailOutlined, UserOutlined } from '@ant-design/icons'
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../hooks/useAuth'
 import { authService } from '../../services/authService'
 import { userService } from '../../services/userService'
 import type { UsuarioDTO } from '../../types/user'
@@ -38,8 +39,16 @@ const readStringField = (value: unknown, field: string): string | undefined => {
   return typeof found === 'string' ? found : undefined
 }
 
+const normalizeTipo = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim()
+
 const ProfilePage = () => {
-  const user = useMemo(() => authService.getSessionUser(), [])
+  const { roles } = useAuth()
+  const user = useMemo(() => authService.getSessionUser(), [roles])
   const [form] = Form.useForm<ProfileFormValues>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -47,15 +56,25 @@ const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<UsuarioDTO | null>(null)
 
-  const tipoUsuarioNome =
+  const tipoUsuarioCadastro =
     profile?.tipoUsuarioNome ??
     profile?.tipoUsuario ??
     readStringField(profile, 'nomeTipoUsuario') ??
     readStringField(profile, 'tipoUsuarioDescricao') ??
     user?.tipoUsuarioNome ??
-    profile?.tipoUsuarioId ??
-    user?.tipoUsuarioId ??
     '-'
+
+  /**
+   * O perfil mostrava só o tipo vindo de `/usuarios/me` (cadastro). O JWT pode declarar outro
+   * papel (ex.: médico com tipo errado no banco). Priorizamos o papel da sessão na tag principal.
+   */
+  const papelSessaoLabel = authService.getPrimaryRoleLabel()
+  const tagPrincipal = papelSessaoLabel ?? String(tipoUsuarioCadastro)
+
+  const cadastroPareceMedico = normalizeTipo(tipoUsuarioCadastro).includes('MEDIC')
+  const cadastroInconsistenteComMedico =
+    roles.includes('MEDICO') && profile != null && !cadastroPareceMedico
+
   const statusAtual = profile?.status ?? user?.status ?? '-'
 
   useEffect(() => {
@@ -184,7 +203,13 @@ const ProfilePage = () => {
           </div>
         </Space>
         <Space direction="vertical" size={6} className="profile-meta">
-          <Tag className="profile-role-tag">{String(tipoUsuarioNome)}</Tag>
+          <Tag className="profile-role-tag">{tagPrincipal}</Tag>
+          {cadastroInconsistenteComMedico && (
+            <Typography.Text type="secondary" style={{ fontSize: 12, maxWidth: 280 }}>
+              Tipo no cadastro: {String(tipoUsuarioCadastro)}. Se estiver incorreto, peça ao administrador
+              para ajustar o tipo de usuário no sistema.
+            </Typography.Text>
+          )}
           <Tag color={statusAtual === 'ATIVO' ? 'green' : 'default'}>
             {statusAtual}
           </Tag>

@@ -28,12 +28,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return true
         }
 
-        // Fallback: alguns JWTs podem nao expor roles em claims padrao.
-        // Nesse caso, mantemos a navegacao no frontend e deixamos o backend decidir permissao final.
-        if (roles.length === 0) {
-          return true
-        }
-
         return requiredRoles.some((role) => roles.includes(role))
       },
     }),

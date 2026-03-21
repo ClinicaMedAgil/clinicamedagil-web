@@ -1,3 +1,6 @@
+# Gerado no start pelo entrypoint do nginx (envsubst): BACKEND_HOST / BACKEND_PORT.
+# Por padrão o Spring expõe :8080 — o proxy repassa o URI completo /clinicamedagil-service/...
+
 server {
     listen 80;
     server_name localhost;
@@ -8,16 +11,15 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # Esta é a parte crítica para o seu Backend
+    # Sem path no proxy_pass: o upstream (Nginx da API) recebe o mesmo URI /clinicamedagil-service/...
     location /clinicamedagil-service/ {
-        # Usando o IP que você confirmou (Gateway da rede Docker)
-        proxy_pass http://172.19.0.1:8080/; 
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Ajuste de CORS para evitar o erro 405/403 no Browser
         add_header 'Access-Control-Allow-Origin' '*' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
         add_header 'Access-Control-Allow-Headers' 'X-Requested-With,Accept,Content-Type,Origin,Authorization' always;
