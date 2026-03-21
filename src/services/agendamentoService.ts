@@ -1,4 +1,13 @@
 import { createCrudService } from './crudFactory'
-import type { AgendamentoDTO } from '../types/resources'
+import { api } from './api'
+import type { AgendamentoCreateFromHorarioPayload, AgendamentoDTO } from '../types/resources'
 
-export const agendamentoService = createCrudService<AgendamentoDTO>('/agendamentos')
+const crud = createCrudService<AgendamentoDTO>('/agendamentos')
+
+export const agendamentoService = {
+  ...crud,
+  async createFromHorario(payload: AgendamentoCreateFromHorarioPayload): Promise<AgendamentoDTO> {
+    const { data } = await api.post<AgendamentoDTO>('/agendamentos', payload)
+    return data
+  },
+}

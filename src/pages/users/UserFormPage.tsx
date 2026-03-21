@@ -1,4 +1,4 @@
-import { Alert, Card, Spin, message } from 'antd'
+import { Alert, Card, Form, Spin, message } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import UserForm from '../../components/users/UserForm'
@@ -9,6 +9,7 @@ import { tipoUsuarioService } from '../../services/tipoUsuarioService'
 import { userService } from '../../services/userService'
 import type { EspecialidadeDTO } from '../../types/resources'
 import type { TipoUsuarioDTO, UsuarioDTO } from '../../types/user'
+import { parseUsuario409 } from '../../utils/usuarioApiConflict'
 
 const normalizeText = (value: string): string =>
   value
@@ -53,6 +54,7 @@ const UserFormPage = () => {
   const [especialidades, setEspecialidades] = useState<EspecialidadeDTO[]>([])
   const [initialValues, setInitialValues] = useState<Partial<UsuarioDTO>>({})
   const [error, setError] = useState<string | null>(null)
+  const [userForm] = Form.useForm<UsuarioDTO>()
 
   const getMedicoTipoId = (): number | undefined =>
     tiposUsuario.find((tipo) => (tipo.nome ? normalizeText(tipo.nome).includes('MEDIC') : false))?.id
@@ -139,8 +141,25 @@ const UserFormPage = () => {
       }
 
       navigate('/app/usuarios')
-    } catch {
-      message.error('Erro ao salvar usuário. Verifique os dados e tente novamente.')
+    } catch (err) {
+      const conflict = parseUsuario409(err)
+      if (conflict.ok) {
+        const fields: Parameters<typeof userForm.setFields>[0] = []
+        if (conflict.fieldErrors.cpf) {
+          fields.push({ name: 'cpf', errors: [conflict.fieldErrors.cpf] })
+        }
+        if (conflict.fieldErrors.email) {
+          fields.push({ name: 'email', errors: [conflict.fieldErrors.email] })
+        }
+        if (fields.length) {
+          userForm.setFields(fields)
+        }
+        if (conflict.globalMessage) {
+          message.error(conflict.globalMessage)
+        }
+      } else {
+        message.error('Erro ao salvar usuário. Verifique os dados e tente novamente.')
+      }
     } finally {
       setSaving(false)
     }
@@ -175,6 +194,7 @@ const UserFormPage = () => {
 
       {!error && (
         <UserForm
+          form={userForm}
           initialValues={initialValues}
           tiposUsuario={tiposUsuario}
           especialidades={especialidades}

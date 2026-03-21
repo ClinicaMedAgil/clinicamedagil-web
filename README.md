@@ -86,6 +86,8 @@ O token e salvo em `localStorage` e enviado automaticamente no header:
   - `src/services/consultaService.ts`
   - `src/services/horarioAgendaService.ts`
   - `src/services/medicoEspecialidadeService.ts` (rota composta)
+  - `src/services/pacienteAgendamentoCatalogoService.ts` (catálogo: especialidades, médicos por especialidade ou por nome, horários por médico)
+  - `agendamentoService.createFromHorario` — cria vínculo paciente + `horarioId` antes do `POST /consultas`
 
 ## Rodar projeto
 

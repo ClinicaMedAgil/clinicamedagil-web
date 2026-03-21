@@ -3,7 +3,6 @@ import {
   MailOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import type { AxiosError } from 'axios'
 import { Alert, Button, Form, Input, Typography, message } from 'antd'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -11,6 +10,7 @@ import doctorSignupImage from '../../assets/doctor-signup.png'
 import { userService } from '../../services/userService'
 import type { PublicRegisterPayload } from '../../types/user'
 import { formatCpf, formatPhone, onlyDigits } from '../../utils/formatters'
+import { parseUsuario409 } from '../../utils/usuarioApiConflict'
 import './LoginPage.css'
 
 interface RegisterFormValues {
@@ -41,10 +41,20 @@ const RegisterPage = () => {
       await userService.createPublicUser(payload)
       message.success('Cadastro realizado com sucesso! Agora faca seu login.')
       navigate('/login', { replace: true })
-    } catch (error) {
-      const status = (error as AxiosError)?.response?.status
-      if (status === 409) {
-        setError('Ja existe um usuario com este e-mail ou CPF.')
+    } catch (err) {
+      const conflict = parseUsuario409(err)
+      if (conflict.ok) {
+        const fields: Parameters<typeof form.setFields>[0] = []
+        if (conflict.fieldErrors.cpf) {
+          fields.push({ name: 'cpf', errors: [conflict.fieldErrors.cpf] })
+        }
+        if (conflict.fieldErrors.email) {
+          fields.push({ name: 'email', errors: [conflict.fieldErrors.email] })
+        }
+        if (fields.length) {
+          form.setFields(fields)
+        }
+        setError(conflict.globalMessage)
       } else {
         setError(
           'Nao foi possivel concluir o cadastro. Verifique os dados e tente novamente.'

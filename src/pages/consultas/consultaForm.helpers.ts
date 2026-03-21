@@ -3,8 +3,10 @@ import dayjs from 'dayjs'
 
 export interface ApiErrorBody {
   message?: string
+  mensagem?: string
   error?: string
   errors?: Record<string, string[] | string>
+  erros?: Array<{ campo?: string; erro?: string }>
 }
 
 export interface ParsedApiError {
@@ -66,7 +68,21 @@ export const parseConsultaApiError = (error: unknown): ParsedApiError => {
     })
   }
 
-  const bodyMessage = getErrorText(body?.message) ?? getErrorText(body?.error)
+  const errosLista = body?.erros
+  if (Array.isArray(errosLista)) {
+    errosLista.forEach((item) => {
+      const campo = typeof item.campo === 'string' ? item.campo.trim() : ''
+      const erro = getErrorText(item.erro)
+      if (campo && erro) {
+        fieldErrors[campo] = fieldErrors[campo] ? `${fieldErrors[campo]} ${erro}` : erro
+      }
+    })
+  }
+
+  const bodyMessage =
+    getErrorText(body?.mensagem) ??
+    getErrorText(body?.message) ??
+    getErrorText(body?.error)
 
   if (status === 403) {
     return { status, message: bodyMessage ?? 'Você não tem permissão.', fieldErrors }
@@ -90,6 +106,22 @@ export const parseConsultaApiError = (error: unknown): ParsedApiError => {
     message: bodyMessage ?? 'Não foi possível salvar a consulta.',
     fieldErrors,
   }
+}
+
+/** Heurística para conflito de horário (400) após POST agendamento/consulta */
+export const isHorarioIndisponivelMessage = (text: string): boolean => {
+  const m = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return (
+    m.includes('nao esta disponivel') ||
+    m.includes('nao disponivel') ||
+    m.includes('indisponivel') ||
+    (m.includes('horario') && m.includes('dispon')) ||
+    m.includes('ocupado') ||
+    m.includes('ja reservado')
+  )
 }
 
 export const buildCreateConsultaPayload = (values: ConsultaFormValues) => {

@@ -18,6 +18,7 @@ import { authService } from '../../services/authService'
 import { userService } from '../../services/userService'
 import type { UsuarioDTO } from '../../types/user'
 import { formatCpf, formatPhone, onlyDigits } from '../../utils/formatters'
+import { parseUsuario409 } from '../../utils/usuarioApiConflict'
 import './ProfilePage.css'
 
 interface ProfileFormValues {
@@ -140,8 +141,25 @@ const ProfilePage = () => {
       setProfile(updated)
       setIsEditing(false)
       message.success('Perfil atualizado com sucesso!')
-    } catch {
-      message.error('Nao foi possivel atualizar o perfil.')
+    } catch (err) {
+      const conflict = parseUsuario409(err)
+      if (conflict.ok) {
+        const fields: Parameters<typeof form.setFields>[0] = []
+        if (conflict.fieldErrors.cpf) {
+          fields.push({ name: 'cpf', errors: [conflict.fieldErrors.cpf] })
+        }
+        if (conflict.fieldErrors.email) {
+          fields.push({ name: 'email', errors: [conflict.fieldErrors.email] })
+        }
+        if (fields.length) {
+          form.setFields(fields)
+        }
+        if (conflict.globalMessage) {
+          message.error(conflict.globalMessage)
+        }
+      } else {
+        message.error('Nao foi possivel atualizar o perfil.')
+      }
     } finally {
       setSaving(false)
     }

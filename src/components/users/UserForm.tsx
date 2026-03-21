@@ -1,3 +1,4 @@
+import type { FormInstance } from 'antd/es/form'
 import { Button, Form, Input, Modal, Select, Space } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { formatCpf, formatPhone, onlyDigits } from '../../utils/formatters'
@@ -12,6 +13,7 @@ const normalizeText = (value: string): string =>
     .toUpperCase()
 
 interface UserFormProps {
+  form?: FormInstance<UsuarioDTO>
   initialValues?: Partial<UsuarioDTO>
   tiposUsuario: TipoUsuarioDTO[]
   especialidades: EspecialidadeDTO[]
@@ -24,6 +26,7 @@ interface UserFormProps {
 }
 
 const UserForm = ({
+  form: formProp,
   initialValues,
   tiposUsuario,
   especialidades,
@@ -34,7 +37,8 @@ const UserForm = ({
   onCreateEspecialidade,
   onCancel,
 }: UserFormProps) => {
-  const [form] = Form.useForm<UsuarioDTO>()
+  const [internalForm] = Form.useForm<UsuarioDTO>()
+  const form = formProp ?? internalForm
   const [especialidadeForm] = Form.useForm<{ nomeEspecialidade: string }>()
   const [openEspecialidadeModal, setOpenEspecialidadeModal] = useState(false)
   const [savingEspecialidade, setSavingEspecialidade] = useState(false)

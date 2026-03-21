@@ -10,6 +10,12 @@ export interface EspecialidadeDTO extends ApiEntityBase {
   descricao?: string | null
 }
 export type AgendamentoDTO = ApiEntityBase
+
+/** POST /agendamentos — vínculo paciente + horário (fluxo paciente) */
+export interface AgendamentoCreateFromHorarioPayload {
+  horarioId: number
+  pacienteId: number
+}
 export interface ConsultaCreatePayload {
   agendamentoId: number
   medicoId: number
@@ -52,4 +58,10 @@ export interface MedicoEspecialidadeDTO {
   medicoId: number
   especialidadeId: number
   [key: string]: unknown
+}
+
+/** Bloco retornado pelo catálogo de agendamento do paciente */
+export interface AgendaHorariosDisponiveisDTO {
+  agenda: AgendaMedicoDTO
+  horariosDisponiveis: HorarioAgendaDTO[]
 }

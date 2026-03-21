@@ -16,6 +16,7 @@ import {
   Typography,
   message,
 } from 'antd'
+import type { SelectProps } from 'antd'
 import type { CalendarProps } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -26,16 +27,21 @@ import { agendamentoService } from '../../services/agendamentoService'
 import { consultaService } from '../../services/consultaService'
 import { especialidadeService } from '../../services/especialidadeService'
 import { medicoEspecialidadeService } from '../../services/medicoEspecialidadeService'
+import { pacienteAgendamentoCatalogoService } from '../../services/pacienteAgendamentoCatalogoService'
 import { userService } from '../../services/userService'
 import type {
+  AgendaHorariosDisponiveisDTO,
   AgendamentoDTO,
   ConsultaCreatePayload,
   ConsultaDTO,
   EspecialidadeDTO,
+  MedicoEspecialidadeDTO,
 } from '../../types/resources'
 import type { UsuarioDTO } from '../../types/user'
 import {
   buildCreateConsultaPayload,
+  isHorarioIndisponivelMessage,
+  isValidPositiveNumber,
   type ConsultaFormValues,
   parseConsultaApiError,
 } from './consultaForm.helpers'
@@ -176,7 +182,9 @@ const parseConsulta = (raw: ConsultaDTO): ConsultaItem | null => {
 }
 
 interface AgendamentoOption {
+  /** No catálogo do paciente: id do HorarioAgendaDTO; no fluxo admin: id do agendamento legado */
   id: number
+  agendaId?: number
   medicoId: number | null
   especialidadeId: number | null
   dataISO: string
@@ -185,6 +193,7 @@ interface AgendamentoOption {
 
 interface ConsultaCreateFormValues extends ConsultaFormValues {
   especialidadeId?: number
+  nomeEspecialidadeBusca?: string
 }
 
 const getRoleName = (value: unknown): string => {
@@ -203,6 +212,83 @@ const isTipo = (user: UsuarioDTO, token: string): boolean => {
   const fromTipoNome = getRoleName(user.tipoUsuarioNome ?? user.tipoUsuario)
   const fromRole = getRoleName((user as unknown as Record<string, unknown>).role)
   return fromTipoNome.includes(token) || fromRole.includes(token)
+}
+
+const mapMedicosFromCatalog = (items: MedicoEspecialidadeDTO[]): { value: number; label: string }[] => {
+  const seen = new Set<number>()
+  const out: { value: number; label: string }[] = []
+  for (const item of items) {
+    const id = Number(item.medicoId)
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    const raw = asRecord(item)
+    const medico = asRecord(raw.medico)
+    const nome =
+      getStringField(medico, 'nome') ?? getStringField(raw, 'nomeMedico', 'medicoNome') ?? null
+    out.push({ value: id, label: nome ?? `Médico #${id}` })
+  }
+  return out.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+}
+
+const buildAgendamentoOptionsFromCatalog = (
+  blocks: AgendaHorariosDisponiveisDTO[],
+  medicoId: number,
+  fallbackEspecialidadeId?: number
+): AgendamentoOption[] => {
+  const out: AgendamentoOption[] = []
+  const fallbackEsp =
+    typeof fallbackEspecialidadeId === 'number' &&
+    Number.isFinite(fallbackEspecialidadeId) &&
+    fallbackEspecialidadeId > 0
+      ? fallbackEspecialidadeId
+      : null
+
+  for (const block of blocks) {
+    const agenda = block.agenda
+    const agendaRec = asRecord(agenda)
+    const agendaRowId = getNumberField(agendaRec, 'id')
+    const dataAgendaRaw =
+      getStringField(agendaRec, 'dataAgenda', 'data') ??
+      (typeof agenda.dataAgenda === 'string' ? agenda.dataAgenda : null)
+    if (!dataAgendaRaw) {
+      continue
+    }
+    const dayBase = dayjs(dataAgendaRaw)
+    if (!dayBase.isValid()) {
+      continue
+    }
+
+    const espFromAgenda =
+      getNumberField(agendaRec, 'especialidadeId', 'idEspecialidade') ?? fallbackEsp
+
+    const horarios = block.horariosDisponiveis ?? []
+    for (const h of horarios) {
+      const hRec = asRecord(h)
+      const hid = getNumberField(hRec, 'id')
+      if (!hid) {
+        continue
+      }
+      const horaInicio = getStringField(hRec, 'horaInicio', 'hora_inicio') ?? '00:00'
+      const horaFim = getStringField(hRec, 'horaFim', 'hora_fim')
+      const hm = horaInicio.slice(0, 5)
+      const parts = hm.split(':').map((x) => Number(x))
+      const hh = parts[0] ?? 0
+      const mm = parts[1] ?? 0
+      const combined = dayBase.hour(hh).minute(mm).second(0).millisecond(0)
+      const fin = horaFim ? horaFim.slice(0, 5) : ''
+      out.push({
+        id: hid,
+        agendaId: agendaRowId ?? undefined,
+        medicoId,
+        especialidadeId: espFromAgenda,
+        dataISO: combined.toISOString(),
+        label: `${combined.format('DD/MM/YYYY')} ${hm}${fin ? ` – ${fin}` : ''}`,
+      })
+    }
+  }
+  return out.sort((a, b) => dayjs(a.dataISO).valueOf() - dayjs(b.dataISO).valueOf())
 }
 
 const parseAgendamentoOption = (item: AgendamentoDTO): AgendamentoOption | null => {
@@ -261,6 +347,10 @@ const ConsultaCalendarPage = () => {
   const [selectedDate, setSelectedDate] = useState(dayjs())
   const [fallbackUserId, setFallbackUserId] = useState<string | null>(null)
   const [usesScopedEndpoint, setUsesScopedEndpoint] = useState(false)
+  const [pacienteMedicos, setPacienteMedicos] = useState<{ value: number; label: string }[]>([])
+  const [pacienteSlots, setPacienteSlots] = useState<AgendamentoOption[]>([])
+  const [loadingCatalogMedicos, setLoadingCatalogMedicos] = useState(false)
+  const [loadingCatalogSlots, setLoadingCatalogSlots] = useState(false)
 
   const currentUserId = useMemo(
     () => normalizeId(sessionUser?.id) ?? fallbackUserId,
@@ -320,9 +410,32 @@ const ConsultaCalendarPage = () => {
     }
   }, [isAdminOrAtendente, isMedicoOnly, sessionUser?.id])
 
+  const fetchPacienteHorarios = useCallback(
+    async (medicoId: number): Promise<AgendamentoOption[]> => {
+      const data = await pacienteAgendamentoCatalogoService.listHorariosDisponiveisPorMedico(medicoId)
+      const esp = createForm.getFieldValue('especialidadeId') as number | undefined
+      return buildAgendamentoOptionsFromCatalog(data, medicoId, esp)
+    },
+    [createForm]
+  )
+
   const loadCreateModalData = async () => {
     setLoadingCreateModalData(true)
     try {
+      if (isPaciente) {
+        const especialidadesData = await pacienteAgendamentoCatalogoService.listEspecialidades()
+        setEspecialidades(especialidadesData)
+        setAgendamentos([])
+        setMedicoEspecialidades([])
+        setUsers([])
+        setPacienteMedicos([])
+        setPacienteSlots([])
+        return
+      }
+
+      setPacienteMedicos([])
+      setPacienteSlots([])
+
       const [agendamentosData, especialidadesData, medicoEspecialidadeData] = await Promise.all([
         agendamentoService.list(),
         especialidadeService.list(),
@@ -423,7 +536,78 @@ const ConsultaCalendarPage = () => {
   const selectedMedicoId = Form.useWatch('medicoId', createForm)
   const selectedAgendamentoId = Form.useWatch('agendamentoId', createForm)
 
+  useEffect(() => {
+    if (!isPaciente || !openCreateModal || !selectedEspecialidadeId) {
+      return
+    }
+
+    let alive = true
+    setLoadingCatalogMedicos(true)
+    void pacienteAgendamentoCatalogoService
+      .listMedicos(selectedEspecialidadeId)
+      .then((data) => {
+        if (!alive) {
+          return
+        }
+        setPacienteMedicos(mapMedicosFromCatalog(data))
+      })
+      .catch((requestError) => {
+        if (!alive) {
+          return
+        }
+        setPacienteMedicos([])
+        message.error(parseConsultaApiError(requestError).message)
+      })
+      .finally(() => {
+        if (alive) {
+          setLoadingCatalogMedicos(false)
+        }
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [isPaciente, openCreateModal, selectedEspecialidadeId])
+
+  useEffect(() => {
+    if (!isPaciente || !openCreateModal || !selectedMedicoId) {
+      if (isPaciente && openCreateModal && !selectedMedicoId) {
+        setPacienteSlots([])
+      }
+      return
+    }
+
+    let alive = true
+    setLoadingCatalogSlots(true)
+    void fetchPacienteHorarios(selectedMedicoId)
+      .then((slots) => {
+        if (!alive) {
+          return
+        }
+        setPacienteSlots(slots)
+      })
+      .catch((requestError) => {
+        if (!alive) {
+          return
+        }
+        setPacienteSlots([])
+        message.error(parseConsultaApiError(requestError).message)
+      })
+      .finally(() => {
+        if (alive) {
+          setLoadingCatalogSlots(false)
+        }
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [fetchPacienteHorarios, isPaciente, openCreateModal, selectedMedicoId])
+
   const medicosDisponiveis = useMemo(() => {
+    if (isPaciente) {
+      return pacienteMedicos
+    }
     if (!selectedEspecialidadeId) {
       return []
     }
@@ -435,9 +619,21 @@ const ConsultaCalendarPage = () => {
     return medicos
       .filter((item) => Number(item.id) > 0 && allowedMedicos.has(Number(item.id)))
       .map((item) => ({ value: Number(item.id), label: item.nome }))
-  }, [medicoEspecialidades, medicos, selectedEspecialidadeId])
+  }, [isPaciente, medicoEspecialidades, medicos, pacienteMedicos])
 
   const agendamentosDisponiveis = useMemo(() => {
+    if (isPaciente) {
+      if (!selectedMedicoId) {
+        return []
+      }
+      if (!selectedEspecialidadeId) {
+        return pacienteSlots
+      }
+      return pacienteSlots.filter(
+        (s) => s.especialidadeId === selectedEspecialidadeId || s.especialidadeId == null
+      )
+    }
+
     if (!selectedMedicoId || !selectedEspecialidadeId) {
       return []
     }
@@ -452,7 +648,34 @@ const ConsultaCalendarPage = () => {
       const ocupado = consultas.some((consulta) => consulta.agendamentoId === item.id)
       return !ocupado
     })
-  }, [agendamentos, consultas, selectedEspecialidadeId, selectedMedicoId])
+  }, [agendamentos, consultas, isPaciente, pacienteSlots, selectedEspecialidadeId, selectedMedicoId])
+
+  const agendamentoSelectOptions = useMemo(() => {
+    if (!isPaciente) {
+      return agendamentosDisponiveis.map((item) => ({ value: item.id, label: item.label }))
+    }
+    const byDay = new Map<string, AgendamentoOption[]>()
+    agendamentosDisponiveis.forEach((item) => {
+      const key = dayjs(item.dataISO).format('YYYY-MM-DD')
+      const arr = byDay.get(key) ?? []
+      arr.push(item)
+      byDay.set(key, arr)
+    })
+    return Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayKey, items]) => {
+        const espId = items[0]?.especialidadeId
+        const espSuffix =
+          espId !== null && espId !== undefined && Number.isFinite(espId) ? ` · Esp. ${espId}` : ''
+        return {
+          label: `${dayjs(dayKey).format('DD/MM/YYYY')}${espSuffix}`,
+          options: items.map((item) => ({
+            value: item.id,
+            label: dayjs(item.dataISO).format('HH:mm'),
+          })),
+        }
+      })
+  }, [agendamentosDisponiveis, isPaciente])
 
   const pacienteOptions = useMemo(() => {
     if (isPaciente) {
@@ -474,10 +697,10 @@ const ConsultaCalendarPage = () => {
     if (!selectedAgendamento) {
       return
     }
-    if (!createForm.getFieldValue('dataConsulta')) {
+    if (isPaciente || !createForm.getFieldValue('dataConsulta')) {
       createForm.setFieldValue('dataConsulta', dayjs(selectedAgendamento.dataISO))
     }
-  }, [createForm, selectedAgendamento])
+  }, [createForm, isPaciente, selectedAgendamento])
 
   const openNewConsultaModal = async () => {
     setOpenCreateModal(true)
@@ -491,11 +714,44 @@ const ConsultaCalendarPage = () => {
   const closeCreateModal = () => {
     setOpenCreateModal(false)
     createForm.resetFields()
+    setPacienteMedicos([])
+    setPacienteSlots([])
+  }
+
+  const handleBuscarMedicosPorNome = async () => {
+    const nome = String(createForm.getFieldValue('nomeEspecialidadeBusca') ?? '').trim()
+    if (!nome) {
+      message.warning('Informe o nome da especialidade.')
+      return
+    }
+    setLoadingCatalogMedicos(true)
+    createForm.setFields([{ name: 'nomeEspecialidadeBusca', errors: [] }])
+    try {
+      const data = await pacienteAgendamentoCatalogoService.listMedicosPorNomeEspecialidade(nome)
+      setPacienteMedicos(mapMedicosFromCatalog(data))
+      createForm.setFieldsValue({
+        especialidadeId: undefined,
+        medicoId: undefined,
+        agendamentoId: undefined,
+      })
+      setPacienteSlots([])
+    } catch (requestError) {
+      setPacienteMedicos([])
+      const parsed = parseConsultaApiError(requestError)
+      if (parsed.status === 422 && parsed.fieldErrors.nome) {
+        createForm.setFields([{ name: 'nomeEspecialidadeBusca', errors: [parsed.fieldErrors.nome] }])
+      }
+      message.error(parsed.message)
+    } finally {
+      setLoadingCatalogMedicos(false)
+    }
   }
 
   const apply422Errors = (fieldErrors: Record<string, string>) => {
     const fieldMap: Record<string, keyof ConsultaCreateFormValues> = {
       agendamentoId: 'agendamentoId',
+      horarioAgendaId: 'agendamentoId',
+      agendaId: 'agendamentoId',
       medicoId: 'medicoId',
       pacienteId: 'pacienteId',
       dataConsulta: 'dataConsulta',
@@ -504,6 +760,7 @@ const ConsultaCalendarPage = () => {
       diagnostico: 'diagnostico',
       prescricao: 'prescricao',
       observacoes: 'observacoes',
+      nome: 'nomeEspecialidadeBusca',
     }
     const fields = Object.entries(fieldErrors)
       .map(([name, errorMessage]) => {
@@ -524,6 +781,114 @@ const ConsultaCalendarPage = () => {
       setSavingCreate(true)
       if (isPaciente && Number(values.pacienteId) !== Number(currentUserId)) {
         message.error('Paciente só pode criar consulta para si mesmo.')
+        return
+      }
+
+      if (isPaciente) {
+        if (pacienteMedicos.length === 0) {
+          message.error('Escolha uma especialidade na lista ou busque médicos pelo nome da especialidade.')
+          return
+        }
+
+        const horarioId = values.agendamentoId
+        const medicoId = values.medicoId
+        const pacienteId = values.pacienteId
+
+        if (!isValidPositiveNumber(horarioId) || !isValidPositiveNumber(medicoId) || !isValidPositiveNumber(pacienteId)) {
+          message.error('Selecione médico e horário válidos.')
+          return
+        }
+
+        const slot = pacienteSlots.find((s) => s.id === horarioId)
+        if (!slot) {
+          message.error('Horário inválido ou desatualizado.')
+          try {
+            const slots = await fetchPacienteHorarios(medicoId)
+            setPacienteSlots(slots)
+          } catch {
+            /* fetchPacienteHorarios já exibe erro */
+          }
+          return
+        }
+
+        const espRef = values.especialidadeId ?? slot.especialidadeId ?? undefined
+
+        const hasHorarioDuplicado = consultas.some(
+          (item) =>
+            Number(item.idPaciente) === pacienteId &&
+            item.dataIso &&
+            dayjs(item.dataIso).isSame(dayjs(slot.dataISO), 'minute')
+        )
+        if (hasHorarioDuplicado) {
+          message.error('Já existe consulta neste horário para esse paciente.')
+          return
+        }
+
+        const duplicateEspecialidade = consultas.find(
+          (item) =>
+            Number(item.idPaciente) === pacienteId &&
+            espRef !== undefined &&
+            espRef !== null &&
+            item.especialidadeId === espRef
+        )
+
+        if (duplicateEspecialidade?.id) {
+          const confirmed = await new Promise<boolean>((resolve) => {
+            Modal.confirm({
+              title: 'Especialidade já agendada',
+              content:
+                'Já existe consulta dessa especialidade para o paciente. Deseja apagar a consulta anterior para marcar uma nova?',
+              okText: 'Sim, substituir',
+              cancelText: 'Não',
+              onOk: () => resolve(true),
+              onCancel: () => resolve(false),
+            })
+          })
+
+          if (!confirmed) {
+            closeCreateModal()
+            navigate('/app/consultas')
+            return
+          }
+
+          await consultaService.remove(duplicateEspecialidade.id)
+        }
+
+        try {
+          const ag = await agendamentoService.createFromHorario({
+            horarioId,
+            pacienteId,
+          })
+          await consultaService.createConsulta({
+            agendamentoId: Number(ag.id),
+            medicoId: Number(slot.medicoId ?? medicoId),
+            pacienteId,
+            dataConsulta: slot.dataISO,
+          })
+        } catch (requestError) {
+          const parsed = parseConsultaApiError(requestError)
+          if (parsed.status === 422) {
+            apply422Errors(parsed.fieldErrors)
+          }
+          if (parsed.status === 400 && isHorarioIndisponivelMessage(parsed.message)) {
+            try {
+              const slots = await fetchPacienteHorarios(medicoId)
+              setPacienteSlots(slots)
+            } catch {
+              /* ignore */
+            }
+            createForm.setFieldValue('agendamentoId', undefined)
+            message.error(`${parsed.message} A lista de horários foi atualizada.`)
+          } else {
+            message.error(parsed.message)
+          }
+          return
+        }
+
+        message.success('Consulta cadastrada com sucesso!')
+        closeCreateModal()
+        await loadData()
+        setSelectedDate(dayjs())
         return
       }
 
@@ -754,22 +1119,64 @@ const ConsultaCalendarPage = () => {
           >
             <Form.Item
               name="especialidadeId"
-              label="Especialidade"
-              rules={[{ required: true, message: 'Selecione a especialidade.' }]}
+              label={isPaciente ? 'Especialidade (ou use a busca abaixo)' : 'Especialidade'}
+              rules={
+                isPaciente
+                  ? []
+                  : [{ required: true, message: 'Selecione a especialidade.' }]
+              }
             >
               <Select
+                allowClear
                 placeholder="Selecione a especialidade"
                 options={especialidadeOptions.filter((item) => Number.isFinite(item.value) && item.value > 0)}
-                onChange={() => {
-                  createForm.setFieldsValue({ medicoId: undefined, agendamentoId: undefined })
+                onChange={(value) => {
+                  createForm.setFieldsValue({
+                    medicoId: undefined,
+                    agendamentoId: undefined,
+                    nomeEspecialidadeBusca: undefined,
+                  })
+                  if (isPaciente && value === undefined) {
+                    setPacienteMedicos([])
+                    setPacienteSlots([])
+                  }
                 }}
               />
             </Form.Item>
 
+            {isPaciente && (
+              <Form.Item
+                label="Buscar médicos pelo nome da especialidade"
+                tooltip="Alternativa à lista. Se a busca for ambígua, use o nome completo da especialidade."
+              >
+                <Space.Compact style={{ width: '100%' }}>
+                  <Form.Item name="nomeEspecialidadeBusca" noStyle>
+                    <Input placeholder="Ex.: Cardiologia" allowClear style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Button
+                    type="default"
+                    loading={loadingCatalogMedicos}
+                    onClick={() => void handleBuscarMedicosPorNome()}
+                  >
+                    Buscar
+                  </Button>
+                </Space.Compact>
+              </Form.Item>
+            )}
+
             <Form.Item name="medicoId" label="Médico" rules={[{ required: true, message: 'Selecione o médico.' }]}>
               <Select
-                placeholder={selectedEspecialidadeId ? 'Selecione o médico' : 'Escolha a especialidade primeiro'}
-                disabled={!selectedEspecialidadeId}
+                placeholder={
+                  isPaciente
+                    ? medicosDisponiveis.length
+                      ? 'Selecione o médico'
+                      : 'Escolha especialidade ou busque pelo nome'
+                    : selectedEspecialidadeId
+                      ? 'Selecione o médico'
+                      : 'Escolha a especialidade primeiro'
+                }
+                disabled={isPaciente ? medicosDisponiveis.length === 0 && !loadingCatalogMedicos : !selectedEspecialidadeId}
+                loading={isPaciente && loadingCatalogMedicos}
                 options={medicosDisponiveis}
                 onChange={() => createForm.setFieldValue('agendamentoId', undefined)}
               />
@@ -777,13 +1184,17 @@ const ConsultaCalendarPage = () => {
 
             <Form.Item
               name="agendamentoId"
-              label="Agendamento"
+              label={isPaciente ? 'Data e horário' : 'Agendamento'}
               rules={[{ required: true, message: 'Selecione o agendamento.' }]}
             >
               <Select
-                placeholder={selectedMedicoId ? 'Selecione o horário disponível' : 'Escolha o médico primeiro'}
+                placeholder={
+                  selectedMedicoId ? 'Selecione o horário disponível' : 'Escolha o médico primeiro'
+                }
                 disabled={!selectedMedicoId}
-                options={agendamentosDisponiveis.map((item) => ({ value: item.id, label: item.label }))}
+                loading={isPaciente && loadingCatalogSlots}
+                optionFilterProp="label"
+                options={agendamentoSelectOptions as SelectProps['options']}
               />
             </Form.Item>
 
@@ -799,25 +1210,37 @@ const ConsultaCalendarPage = () => {
               />
             </Form.Item>
 
-            <Form.Item name="dataConsulta" label="Data da consulta (opcional)">
-              <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
+            <Form.Item
+              name="dataConsulta"
+              label={isPaciente ? 'Data e horário confirmados' : 'Data da consulta (opcional)'}
+            >
+              <DatePicker
+                showTime
+                format="DD/MM/YYYY HH:mm"
+                style={{ width: '100%' }}
+                disabled={isPaciente}
+              />
             </Form.Item>
 
-            <Form.Item name="queixaPrincipal" label="Queixa principal">
-              <Input.TextArea rows={2} maxLength={500} />
-            </Form.Item>
-            <Form.Item name="historiaDoencaAtual" label="História da doença atual">
-              <Input.TextArea rows={3} maxLength={2000} />
-            </Form.Item>
-            <Form.Item name="diagnostico" label="Diagnóstico">
-              <Input.TextArea rows={3} maxLength={2000} />
-            </Form.Item>
-            <Form.Item name="prescricao" label="Prescrição">
-              <Input.TextArea rows={3} maxLength={2000} />
-            </Form.Item>
-            <Form.Item name="observacoes" label="Observações">
-              <Input.TextArea rows={3} maxLength={2000} />
-            </Form.Item>
+            {!isPaciente && (
+              <>
+                <Form.Item name="queixaPrincipal" label="Queixa principal">
+                  <Input.TextArea rows={2} maxLength={500} />
+                </Form.Item>
+                <Form.Item name="historiaDoencaAtual" label="História da doença atual">
+                  <Input.TextArea rows={3} maxLength={2000} />
+                </Form.Item>
+                <Form.Item name="diagnostico" label="Diagnóstico">
+                  <Input.TextArea rows={3} maxLength={2000} />
+                </Form.Item>
+                <Form.Item name="prescricao" label="Prescrição">
+                  <Input.TextArea rows={3} maxLength={2000} />
+                </Form.Item>
+                <Form.Item name="observacoes" label="Observações">
+                  <Input.TextArea rows={3} maxLength={2000} />
+                </Form.Item>
+              </>
+            )}
 
             <Space>
               <Button onClick={closeCreateModal}>Cancelar</Button>
